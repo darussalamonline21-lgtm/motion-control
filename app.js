@@ -177,6 +177,25 @@ function clearVideo() {
 }
 
 // === API Calls ===
+async function uploadViaApi(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || err.error || 'Cloud upload is not configured');
+    }
+
+    const result = await response.json();
+    if (!result.url) throw new Error('Cloud upload did not return a URL');
+    return result.url;
+}
+
 async function uploadToTmpHost(file) {
     try {
         const formData = new FormData();
@@ -202,6 +221,15 @@ async function uploadToTmpHost(file) {
     }
 }
 
+async function uploadPublicFile(file) {
+    try {
+        return await uploadViaApi(file);
+    } catch (apiErr) {
+        console.warn('Cloud upload failed, falling back to tmpfiles.org:', apiErr);
+        return uploadToTmpHost(file);
+    }
+}
+
 async function generateVideo() {
     const apiKey = getApiKey();
     if (requiresClientApiKey && !apiKey) {
@@ -224,11 +252,11 @@ async function generateVideo() {
 
         if (imageFile && !imgUrl) {
             els.processingStatus.textContent = 'Uploading image...';
-            imageData = await uploadToTmpHost(imageFile);
+            imageData = await uploadPublicFile(imageFile);
         }
         if (videoFile && !vidUrl) {
             els.processingStatus.textContent = 'Uploading video...';
-            videoData = await uploadToTmpHost(videoFile);
+            videoData = await uploadPublicFile(videoFile);
         }
 
         const modelId = els.qualitySelect.value;
@@ -248,7 +276,7 @@ async function generateVideo() {
         let imageData = imgUrl;
         if (imageFile && !imgUrl) {
             els.processingStatus.textContent = 'Uploading image...';
-            imageData = await uploadToTmpHost(imageFile);
+            imageData = await uploadPublicFile(imageFile);
         }
 
         const model = els.modelSelect.value;

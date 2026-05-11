@@ -51,6 +51,23 @@ Set the Magnific API key as a Pages secret:
 npx wrangler pages secret put MAGNIFIC_API_KEY --project-name kling-motion
 ```
 
+Create an R2 bucket for uploaded images and videos:
+
+```bash
+npx wrangler r2 bucket create kling-motion-media
+```
+
+In the Cloudflare dashboard, open the R2 bucket and enable public access. Use either the bucket's public `r2.dev` URL or your custom public domain as `MEDIA_PUBLIC_URL`.
+
+Then open the Pages project settings and add:
+
+- R2 bucket binding:
+  - Variable name: `MEDIA_BUCKET`
+  - Bucket: `kling-motion-media`
+- Environment variable:
+  - Name: `MEDIA_PUBLIC_URL`
+  - Value: your public R2 bucket URL, for example `https://pub-xxxx.r2.dev`
+
 Deploy:
 
 ```bash
@@ -67,8 +84,10 @@ If deploying from the Cloudflare dashboard:
 - Build command: leave empty
 - Build output directory: `/`
 - Functions directory: `functions`
-- Add environment secret: `MAGNIFIC_API_KEY`
+- Add environment secret: `MAGNIFIC_API_KEY` if you want the site to use your API key
+- Add R2 bucket binding: `MEDIA_BUCKET`
+- Add environment variable: `MEDIA_PUBLIC_URL`
 
 ## Notes
 
-The app still uploads local files to `tmpfiles.org` before sending them to Magnific, because Magnific requires publicly accessible `image_url` and `video_url` inputs.
+Magnific requires publicly accessible `image_url` and `video_url` inputs. In production, uploads should go to Cloudflare R2 through `/api/upload`. If R2 is not configured, the browser falls back to `tmpfiles.org`, which can be blocked by third-party IP protection and is not recommended for production.

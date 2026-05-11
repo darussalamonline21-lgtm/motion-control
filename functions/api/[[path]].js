@@ -19,6 +19,47 @@ function getApiPath(params) {
     return Array.isArray(path) ? path.join('/') : path;
 }
 
+function sanitizeFileName(name) {
+    return name
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 120) || 'upload';
+}
+
+async function handleUpload(request, env) {
+    if (request.method !== 'POST') {
+        return json({ error: 'Method not allowed' }, 405);
+    }
+
+    if (!env.MEDIA_BUCKET || !env.MEDIA_PUBLIC_URL) {
+        return json({
+            error: 'Cloud upload is not configured',
+            message: 'Bind an R2 bucket as MEDIA_BUCKET and set MEDIA_PUBLIC_URL.',
+        }, 501);
+    }
+
+    const formData = await request.formData();
+    const file = formData.get('file');
+
+    if (!file || typeof file === 'string') {
+        return json({ error: 'Missing file field' }, 400);
+    }
+
+    const key = `uploads/${Date.now()}-${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
+
+    await env.MEDIA_BUCKET.put(key, file.stream(), {
+        httpMetadata: {
+            contentType: file.type || 'application/octet-stream',
+        },
+    });
+
+    return json({
+        key,
+        url: `${env.MEDIA_PUBLIC_URL.replace(/\/$/, '')}/${key}`,
+    });
+}
+
 export async function onRequest({ request, env, params }) {
     if (request.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers: corsHeaders });
@@ -28,6 +69,10 @@ export async function onRequest({ request, env, params }) {
 
     if (apiPath === 'config') {
         return json({ requiresClientApiKey: !env.MAGNIFIC_API_KEY });
+    }
+
+    if (apiPath === 'upload') {
+        return handleUpload(request, env);
     }
 
     const apiKey = env.MAGNIFIC_API_KEY || request.headers.get('x-magnific-api-key');
