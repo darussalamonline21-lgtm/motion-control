@@ -1,0 +1,19 @@
+{
+  "name": "kling_motion",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "pages:dev": "npx wrangler pages dev .",
+    "pages:deploy": "npx wrangler pages deploy . --project-name kling-motion"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  }
+}

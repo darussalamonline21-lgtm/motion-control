@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kling Motion Studio — AI Video Generator</title>
+    <meta name="description" content="Generate stunning AI videos with Kling AI Motion Control. Upload reference images and videos to create cinematic motion content.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <!-- Background Effects -->
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+    <div class="bg-glow bg-glow-3"></div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                        <path d="M14 2L2 8v12l12 6 12-6V8L14 2z" stroke="url(#logoGrad)" stroke-width="2" fill="none"/>
+                        <path d="M14 8l-6 3v6l6 3 6-3v-6l-6-3z" fill="url(#logoGrad)" opacity="0.6"/>
+                        <defs>
+                            <linearGradient id="logoGrad" x1="2" y1="2" x2="26" y2="26">
+                                <stop stop-color="#a78bfa"/>
+                                <stop offset="1" stop-color="#6366f1"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <span class="logo-text">Kling Motion <span class="logo-highlight">Studio</span></span>
+            </div>
+            <div class="header-actions">
+                <div class="api-status" id="apiStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">No API Key</span>
+                </div>
+                <button class="btn-settings" id="btnSettings" title="Settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0110 0v4"/>
+                    </svg>
+                    API Configuration
+                </h2>
+                <button class="modal-close" id="closeSettings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="apiKeyInput">Magnific / Freepik API Key</label>
+                    <div class="input-with-icon">
+                        <input type="password" id="apiKeyInput" placeholder="Enter your x-magnific-api-key..." autocomplete="off">
+                        <button class="btn-icon toggle-password" id="togglePassword" title="Show/Hide">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="form-hint">Your API key is stored locally in your browser. Get yours at <a href="https://www.magnific.com/developers/dashboard" target="_blank">magnific.com/dashboard</a></p>
+                </div>
+                <button class="btn btn-primary btn-full" id="saveApiKey">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                        <polyline points="17,21 17,13 7,13 7,21"/>
+                        <polyline points="7,3 7,8 15,8"/>
+                    </svg>
+                    Save API Key
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Mode Selector -->
+        <div class="mode-selector">
+            <button class="mode-tab active" data-mode="motion-control" id="modeMotionControl">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="23 7 16 12 23 17 23 7"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+                Motion Control
+                <span class="mode-badge">Video + Image</span>
+            </button>
+            <button class="mode-tab" data-mode="image-to-video" id="modeImageToVideo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                Image to Video
+                <span class="mode-badge">Image Only</span>
+            </button>
+            <button class="mode-tab" data-mode="text-to-video" id="modeTextToVideo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                Text to Video
+                <span class="mode-badge">Prompt Only</span>
+            </button>
+        </div>
+
+        <div class="workspace">
+            <!-- Left Panel: Inputs -->
+            <div class="panel panel-inputs">
+                <div class="panel-header">
+                    <h2>Input References</h2>
+                </div>
+                <div class="panel-body">
+                    <!-- Reference Image Upload -->
+                    <div class="upload-section" id="imageSection">
+                        <label class="upload-label">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            Reference Image
+                            <span class="required">*</span>
+                        </label>
+                        <div class="upload-area" id="imageUploadArea">
+                            <div class="upload-placeholder" id="imagePlaceholder">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                    <polyline points="21 15 16 10 5 21"/>
+                                </svg>
+                                <p>Drag & drop an image or click to browse</p>
+                                <span class="upload-hint">JPG, PNG, WEBP • Max 10MB • Min 300×300px</span>
+                                <span class="upload-hint" style="color:#f59e0b;margin-top:4px">⚠ Motion Control requires publicly accessible URL</span>
+                            </div>
+                            <img id="imagePreview" class="upload-preview hidden" alt="Reference image preview">
+                            <button class="btn-remove hidden" id="removeImage" title="Remove image">&times;</button>
+                            <input type="file" id="imageFileInput" accept="image/jpeg,image/png,image/webp" hidden>
+                        </div>
+                        <div class="url-input-group">
+                            <span class="or-divider">or paste URL</span>
+                            <input type="url" id="imageUrlInput" placeholder="https://example.com/image.jpg" class="input-field">
+                        </div>
+                    </div>
+
+                    <!-- Reference Video Upload (Motion Control mode only) -->
+                    <div class="upload-section" id="videoSection">
+                        <label class="upload-label">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="23 7 16 12 23 17 23 7"/>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                            </svg>
+                            Reference Video
+                            <span class="required">*</span>
+                        </label>
+                        <div class="upload-area" id="videoUploadArea">
+                            <div class="upload-placeholder" id="videoPlaceholder">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4">
+                                    <polygon points="23 7 16 12 23 17 23 7"/>
+                                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                                </svg>
+                                <p>Drag & drop a video or click to browse</p>
+                                <span class="upload-hint">MP4, MOV, WEBM, M4V • 3-30 seconds</span>
+                            </div>
+                            <video id="videoPreview" class="upload-preview hidden" controls muted></video>
+                            <button class="btn-remove hidden" id="removeVideo" title="Remove video">&times;</button>
+                            <input type="file" id="videoFileInput" accept="video/mp4,video/quicktime,video/webm,video/x-m4v" hidden>
+                        </div>
+                        <div class="url-input-group">
+                            <span class="or-divider">or paste URL</span>
+                            <input type="url" id="videoUrlInput" placeholder="https://example.com/motion.mp4" class="input-field">
+                        </div>
+                    </div>
+
+                    <!-- Prompt -->
+                    <div class="form-section">
+                        <label class="upload-label" for="promptInput">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                            </svg>
+                            Prompt
+                        </label>
+                        <textarea id="promptInput" class="textarea-field" rows="3" placeholder="Describe the desired motion or scene... (optional for Motion Control)" maxlength="2500"></textarea>
+                        <div class="char-count"><span id="charCount">0</span> / 2500</div>
+                    </div>
+
+                    <!-- Negative Prompt (not for motion control) -->
+                    <div class="form-section" id="negativePromptSection">
+                        <label class="upload-label" for="negativePromptInput">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                            </svg>
+                            Negative Prompt
+                        </label>
+                        <textarea id="negativePromptInput" class="textarea-field" rows="2" placeholder="Describe what to avoid..." maxlength="2500"></textarea>
+                    </div>
+
+                    <!-- Settings -->
+                    <div class="settings-grid">
+                        <!-- Model Selection -->
+                        <div class="form-group" id="modelGroup">
+                            <label>Model</label>
+                            <select id="modelSelect" class="select-field">
+                                <option value="kling-v2-6-pro">Kling 2.6 Pro</option>
+                                <option value="kling-v2-5-pro">Kling 2.5 Pro</option>
+                            </select>
+                        </div>
+
+                        <!-- Quality/Mode for Motion Control -->
+                        <div class="form-group" id="qualityGroup">
+                            <label>Model (Motion Control)</label>
+                            <select id="qualitySelect" class="select-field">
+                                <option value="kling-v3-motion-control-pro">Kling 3 Pro (Higher Quality)</option>
+                                <option value="kling-v3-motion-control-std" selected>Kling 3 Standard (Faster)</option>
+                                <option value="kling-v2-6-motion-control-pro">Kling 2.6 Pro</option>
+                                <option value="kling-v2-6-motion-control-std">Kling 2.6 Standard</option>
+                            </select>
+                        </div>
+
+                        <!-- Duration -->
+                        <div class="form-group" id="durationGroup">
+                            <label>Duration</label>
+                            <select id="durationSelect" class="select-field">
+                                <option value="5">5 seconds</option>
+                                <option value="10">10 seconds</option>
+                            </select>
+                        </div>
+
+                        <!-- Aspect Ratio (text-to-video and image-to-video for 2.6) -->
+                        <div class="form-group" id="aspectGroup">
+                            <label>Aspect Ratio</label>
+                            <select id="aspectSelect" class="select-field">
+                                <option value="widescreen_16_9">16:9 Widescreen</option>
+                                <option value="social_story_9_16">9:16 Story</option>
+                                <option value="square_1_1">1:1 Square</option>
+                            </select>
+                        </div>
+
+                        <!-- Character Orientation (motion control only) -->
+                        <div class="form-group" id="orientationGroup">
+                            <label>Character Orientation</label>
+                            <select id="orientationSelect" class="select-field">
+                                <option value="video">Match Video (up to 30s)</option>
+                                <option value="image">Match Image (up to 10s)</option>
+                            </select>
+                        </div>
+
+                        <!-- CFG Scale -->
+                        <div class="form-group form-group-wide">
+                            <label>CFG Scale <span class="cfg-value" id="cfgValue">0.5</span></label>
+                            <input type="range" id="cfgScale" min="0" max="1" step="0.05" value="0.5" class="range-field">
+                            <div class="range-labels">
+                                <span>More Flexible</span>
+                                <span>Closer to Prompt</span>
+                            </div>
+                        </div>
+
+                        <!-- Generate Audio (for 2.6 text/image mode) -->
+                        <div class="form-group" id="audioGroup">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="generateAudio">
+                                <span class="checkbox-custom"></span>
+                                Generate Audio
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Generate Button -->
+                    <button class="btn btn-generate" id="btnGenerate">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        Generate Video
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Panel: Output -->
+            <div class="panel panel-output">
+                <div class="panel-header">
+                    <h2>Output</h2>
+                    <div class="task-info hidden" id="taskInfo">
+                        <span class="task-id" id="taskIdDisplay"></span>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="output-area" id="outputArea">
+                        <!-- Empty State -->
+                        <div class="output-empty" id="outputEmpty">
+                            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.15">
+                                <polygon points="23 7 16 12 23 17 23 7"/>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                            </svg>
+                            <h3>No video generated yet</h3>
+                            <p>Upload your references and click Generate to start</p>
+                        </div>
+
+                        <!-- Processing State -->
+                        <div class="output-processing hidden" id="outputProcessing">
+                            <div class="processing-spinner">
+                                <div class="spinner-ring"></div>
+                                <div class="spinner-ring"></div>
+                                <div class="spinner-ring"></div>
+                            </div>
+                            <h3>Generating your video...</h3>
+                            <p id="processingStatus">Task created. Waiting for processing...</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill"></div>
+                            </div>
+                            <p class="processing-hint">This may take 1-5 minutes depending on duration and complexity</p>
+                        </div>
+
+                        <!-- Result State -->
+                        <div class="output-result hidden" id="outputResult">
+                            <video id="resultVideo" controls autoplay loop class="result-video"></video>
+                            <div class="result-actions">
+                                <a id="downloadLink" class="btn btn-primary" download="kling-motion-video.mp4">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    Download
+                                </a>
+                                <button class="btn btn-secondary" id="btnNewGeneration">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="23 4 23 10 17 10"/>
+                                        <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                                    </svg>
+                                    New Generation
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Error State -->
+                        <div class="output-error hidden" id="outputError">
+                            <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" opacity="0.6">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="15" y1="9" x2="9" y2="15"/>
+                                <line x1="9" y1="9" x2="15" y2="15"/>
+                            </svg>
+                            <h3>Generation Failed</h3>
+                            <p id="errorMessage">An error occurred. Please try again.</p>
+                            <button class="btn btn-secondary" id="btnRetry">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"/>
+                                    <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                                </svg>
+                                Retry
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- History -->
+                    <div class="history-section" id="historySection">
+                        <div class="history-header">
+                            <h3>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                                Recent Tasks
+                            </h3>
+                            <button class="btn-text" id="clearHistory">Clear</button>
+                        </div>
+                        <div class="history-list" id="historyList">
+                            <p class="history-empty">No previous tasks</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
