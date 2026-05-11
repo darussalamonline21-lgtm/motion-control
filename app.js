@@ -188,7 +188,10 @@ async function uploadViaApi(file) {
 
     if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || err.error || 'Cloud upload is not configured');
+        const message = err.message || err.error || 'Cloud upload is not configured';
+        const uploadError = new Error(message);
+        uploadError.status = response.status;
+        throw uploadError;
     }
 
     const result = await response.json();
@@ -225,6 +228,9 @@ async function uploadPublicFile(file) {
     try {
         return await uploadViaApi(file);
     } catch (apiErr) {
+        if (apiErr.status === 501 || location.hostname.endsWith('.pages.dev')) {
+            throw new Error(apiErr.message);
+        }
         console.warn('Cloud upload failed, falling back to tmpfiles.org:', apiErr);
         return uploadToTmpHost(file);
     }
