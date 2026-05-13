@@ -77,13 +77,29 @@
                     </div>
                     <p class="form-hint">Your API key is stored locally in your browser. Get yours at <a href="https://www.magnific.com/developers/dashboard" target="_blank">magnific.com/dashboard</a></p>
                 </div>
+                <div class="form-group" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;margin-top:4px;">
+                    <label for="nbApiKeyInput" style="display:flex;align-items:center;gap:6px;">
+                        <span style="background:rgba(251,191,36,0.15);color:#fbbf24;font-size:0.7em;padding:2px 6px;border-radius:6px;font-weight:700;">NB2</span>
+                        Nano Banana 2 API Key
+                    </label>
+                    <div class="input-with-icon">
+                        <input type="password" id="nbApiKeyInput" placeholder="Enter your Nano Banana Bearer token..." autocomplete="off">
+                        <button class="btn-icon" id="toggleNbPassword" title="Show/Hide">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="form-hint">Get your key at <a href="https://nanobananaapi.ai/api-key" target="_blank">nanobananaapi.ai/api-key</a></p>
+                </div>
                 <button class="btn btn-primary btn-full" id="saveApiKey">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
                         <polyline points="17,21 17,13 7,13 7,21"/>
                         <polyline points="7,3 7,8 15,8"/>
                     </svg>
-                    Save API Key
+                    Save API Keys
                 </button>
             </div>
         </div>
@@ -93,7 +109,16 @@
     <main class="main">
         <!-- Mode Selector -->
         <div class="mode-selector">
-            <button class="mode-tab active" data-mode="motion-control" id="modeMotionControl">
+            <button class="mode-tab active" data-mode="image-generator" id="modeImageGenerator">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <path d="M3 9h18M9 21V9"/>
+                    <circle cx="15" cy="6" r="1" fill="currentColor"/>
+                </svg>
+                Image Generator
+                <span class="mode-badge" style="background:rgba(251,191,36,0.15);color:#fbbf24;">Nano Banana 2</span>
+            </button>
+            <button class="mode-tab" data-mode="motion-control" id="modeMotionControl">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon points="23 7 16 12 23 17 23 7"/>
                     <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
@@ -219,7 +244,7 @@
                             <label>Model</label>
                             <select id="modelSelect" class="select-field">
                                 <option value="kling-v2-6-pro">Kling 2.6 Pro</option>
-                                <option value="kling-v2-5-pro">Kling 2.5 Pro</option>
+                                <option value="kling-v2-5-pro" selected>Kling 2.5 Pro ⚡ Hemat</option>
                             </select>
                         </div>
 
@@ -228,9 +253,9 @@
                             <label>Model (Motion Control)</label>
                             <select id="qualitySelect" class="select-field">
                                 <option value="kling-v3-motion-control-pro">Kling 3 Pro (Higher Quality)</option>
-                                <option value="kling-v3-motion-control-std" selected>Kling 3 Standard (Faster)</option>
+                                <option value="kling-v3-motion-control-std" selected>Kling 3 Standard ⚡ Hemat</option>
                                 <option value="kling-v2-6-motion-control-pro">Kling 2.6 Pro</option>
-                                <option value="kling-v2-6-motion-control-std">Kling 2.6 Standard</option>
+                                <option value="kling-v2-6-motion-control-std">Kling 2.6 Standard ⚡ Paling Hemat</option>
                             </select>
                         </div>
 
@@ -238,7 +263,7 @@
                         <div class="form-group" id="durationGroup">
                             <label>Duration</label>
                             <select id="durationSelect" class="select-field">
-                                <option value="5">5 seconds</option>
+                                <option value="5" selected>5 seconds ⚡ Hemat</option>
                                 <option value="10">10 seconds</option>
                             </select>
                         </div>
@@ -272,17 +297,144 @@
                             </div>
                         </div>
 
-                        <!-- Generate Audio (for 2.6 text/image mode) -->
+                        <!-- Generate Audio (disabled to save API credits) -->
                         <div class="form-group" id="audioGroup">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="generateAudio">
+                            <label class="checkbox-label" style="opacity:0.45;cursor:not-allowed;" title="Audio generation is disabled to save API credits">
+                                <input type="checkbox" id="generateAudio" disabled>
                                 <span class="checkbox-custom"></span>
                                 Generate Audio
+                                <span style="font-size:0.72em;color:#f59e0b;margin-left:6px;">⚡ Disabled (saves credits)</span>
                             </label>
                         </div>
                     </div>
 
-                    <!-- Generate Button -->
+                    <!-- ===== IMAGE GENERATOR SECTION (Nano                     <div id="imgGenSection" class="hidden">
+
+                        <!-- Header Info -->
+                        <div class="nb-workflow-info">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            Upload foto referensi di masing-masing slot. AI akan menggabungkan ketiganya.
+                        </div>
+
+                        <!-- 3 Reference Slots -->
+                        <div class="nb-slots-grid">
+
+                            <!-- SLOT 1: Model -->
+                            <div class="nb-slot">
+                                <div class="nb-slot-header">
+                                    <span class="nb-slot-num nb-num-1">1</span>
+                                    <div>
+                                        <div class="nb-slot-title">Model / Karakter <span class="required">*</span></div>
+                                        <div class="nb-slot-hint">Foto wajah & tubuh jelas</div>
+                                    </div>
+                                </div>
+                                <div class="upload-area nb-slot-area" id="nbSlot1Area">
+                                    <div class="upload-placeholder" id="nbSlot1Placeholder">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
+                                        <span class="upload-hint">Klik atau drag foto</span>
+                                    </div>
+                                    <img id="nbSlot1Preview" class="nb-slot-preview hidden" alt="Model">
+                                    <button class="btn-remove hidden" id="nbSlot1Remove" title="Remove">&times;</button>
+                                    <input type="file" id="nbSlot1Input" accept="image/jpeg,image/png,image/webp" hidden>
+                                </div>
+                            </div>
+
+                            <!-- SLOT 2: Pose & Camera -->
+                            <div class="nb-slot">
+                                <div class="nb-slot-header">
+                                    <span class="nb-slot-num nb-num-2">2</span>
+                                    <div>
+                                        <div class="nb-slot-title">Pose & Kamera</div>
+                                        <div class="nb-slot-hint">Referensi pose & angle</div>
+                                    </div>
+                                </div>
+                                <div class="upload-area nb-slot-area" id="nbSlot2Area">
+                                    <div class="upload-placeholder" id="nbSlot2Placeholder">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                                        <span class="upload-hint">Opsional</span>
+                                    </div>
+                                    <img id="nbSlot2Preview" class="nb-slot-preview hidden" alt="Pose reference">
+                                    <button class="btn-remove hidden" id="nbSlot2Remove" title="Remove">&times;</button>
+                                    <input type="file" id="nbSlot2Input" accept="image/jpeg,image/png,image/webp" hidden>
+                                </div>
+                            </div>
+
+                            <!-- SLOT 3: Fashion -->
+                            <div class="nb-slot">
+                                <div class="nb-slot-header">
+                                    <span class="nb-slot-num nb-num-3">3</span>
+                                    <div>
+                                        <div class="nb-slot-title">Fashion / Outfit</div>
+                                        <div class="nb-slot-hint">Referensi pakaian</div>
+                                    </div>
+                                </div>
+                                <div class="upload-area nb-slot-area" id="nbSlot3Area">
+                                    <div class="upload-placeholder" id="nbSlot3Placeholder">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.57a1 1 0 00.99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.57a2 2 0 00-1.34-2.23z"/></svg>
+                                        <span class="upload-hint">Opsional</span>
+                                    </div>
+                                    <img id="nbSlot3Preview" class="nb-slot-preview hidden" alt="Fashion reference">
+                                    <button class="btn-remove hidden" id="nbSlot3Remove" title="Remove">&times;</button>
+                                    <input type="file" id="nbSlot3Input" accept="image/jpeg,image/png,image/webp" hidden>
+                                </div>
+                            </div>
+
+                        </div><!-- /nb-slots-grid -->
+
+                        <!-- Auto-prompt preview -->
+                        <div class="nb-auto-prompt">
+                            <div class="nb-auto-prompt-label">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                                Prompt otomatis (berdasarkan slot yang diisi)
+                            </div>
+                            <div class="nb-auto-prompt-text" id="nbAutoPromptPreview">Upload foto model di Slot 1 untuk mulai...</div>
+                        </div>
+
+                        <!-- Extra prompt (optional) -->
+                        <div class="form-section">
+                            <label style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:6px;display:block;">
+                                Prompt Tambahan
+                                <span style="font-size:0.7em;color:var(--text-muted);margin-left:4px;">(opsional — background, lighting, style...)</span>
+                            </label>
+                            <textarea id="nbPromptInput" class="textarea-field" rows="2" placeholder="e.g: outdoor café, golden hour lighting, cinematic depth of field..." maxlength="2000"></textarea>
+                        </div>
+
+                        <!-- NB Settings -->
+                        <div class="settings-grid">
+                            <div class="form-group">
+                                <label>Aspect Ratio</label>
+                                <select id="nbAspectRatio" class="select-field">
+                                    <option value="9:16">9:16 Story/Portrait</option>
+                                    <option value="3:4" selected>3:4 Portrait</option>
+                                    <option value="1:1">1:1 Square</option>
+                                    <option value="4:3">4:3 Landscape</option>
+                                    <option value="16:9">16:9 Widescreen</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Resolution</label>
+                                <select id="nbResolution" class="select-field">
+                                    <option value="1K" selected>1K ⚡ Hemat</option>
+                                    <option value="2K">2K</option>
+                                    <option value="4K">4K Premium</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Generate Image Button -->
+                        <button class="btn btn-generate nb-btn" id="btnGenerateImage">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <path d="M3 9h18M9 21V9"/>
+                                <circle cx="15" cy="6" r="1" fill="currentColor"/>
+                            </svg>
+                            Generate Image
+                        </button>
+                    </div>
+
+                   </div>
+
+                    <!-- Generate Button (Kling) -->
                     <button class="btn btn-generate" id="btnGenerate">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polygon points="5 3 19 12 5 21 5 3"/>
@@ -359,6 +511,89 @@
                             <h3>Generation Failed</h3>
                             <p id="errorMessage">An error occurred. Please try again.</p>
                             <button class="btn btn-secondary" id="btnRetry">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"/>
+                                    <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                                </svg>
+                                Retry
+                            </button>
+                        </div>
+
+                        <!-- ===== IMAGE GENERATOR OUTPUT STATES ===== -->
+                        <!-- NB Empty -->
+                        <div class="output-empty hidden" id="nbOutputEmpty">
+                            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.15">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                <path d="M3 9h18M9 21V9"/>
+                            </svg>
+                            <h3>No image generated yet</h3>
+                            <p>Upload character photo(s) and click Generate</p>
+                        </div>
+
+                        <!-- NB Processing -->
+                        <div class="output-processing hidden" id="nbOutputProcessing">
+                            <div class="processing-spinner">
+                                <div class="spinner-ring" style="border-top-color:#fbbf24;"></div>
+                                <div class="spinner-ring" style="border-right-color:#f59e0b;"></div>
+                                <div class="spinner-ring" style="border-bottom-color:#fcd34d;"></div>
+                            </div>
+                            <h3>Generating image...</h3>
+                            <p id="nbProcessingStatus">Submitting to Nano Banana 2...</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="nbProgressFill" style="background:linear-gradient(90deg,#fbbf24,#f59e0b);"></div>
+                            </div>
+                        </div>
+
+                        <!-- NB Result -->
+                        <div class="output-result hidden" id="nbOutputResult">
+                            <img id="nbResultImage" class="result-video" style="object-fit:contain;background:#111;" alt="Generated image">
+                            <div class="result-actions">
+                                <a id="nbDownloadLink" class="btn btn-primary" download="nano-banana-image.jpg" target="_blank">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    Download
+                                </a>
+                                <div class="nb-use-ref-wrap">
+                                    <button class="btn" id="btnUseAsRef" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;font-weight:700;">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                                        </svg>
+                                        Pakai di Kling
+                                    </button>
+                                    <div id="useAsRefMenu" class="nb-ref-menu hidden">
+                                        <button class="nb-ref-option" id="btnUseForMotion">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                                            Motion Control
+                                        </button>
+                                        <button class="nb-ref-option" id="btnUseForI2V">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="21 15 16 10 5 21"/></svg>
+                                            Image to Video
+                                        </button>
+                                    </div>
+                                </div>
+                                <button class="btn btn-secondary" id="btnNewImage">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="23 4 23 10 17 10"/>
+                                        <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+                                    </svg>
+                                    New Image
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- NB Error -->
+                        <div class="output-error hidden" id="nbOutputError">
+                            <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" opacity="0.6">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="15" y1="9" x2="9" y2="15"/>
+                                <line x1="9" y1="9" x2="15" y2="15"/>
+                            </svg>
+                            <h3>Image Generation Failed</h3>
+                            <p id="nbErrorMessage">An error occurred. Please try again.</p>
+                            <button class="btn btn-secondary" id="btnRetryImage">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <polyline points="23 4 23 10 17 10"/>
                                     <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>

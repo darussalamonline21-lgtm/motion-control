@@ -1,14 +1,45 @@
 // ===== Kling Motion Studio - App Logic =====
 // Use local proxy to avoid CORS issues (server.js proxies to api.magnific.com)
 const API_BASE = '/api';
-const POLL_INTERVAL = 5000;
+const POLL_INTERVAL = 10000; // 10s between polls (avoid 429 rate-limit)
+const MAX_POLL_ATTEMPTS = 60;  // Max ~10 minutes of polling
+const MAX_429_RETRIES = 5;     // Max retries per poll on 429
+
+// ===== Status Endpoint Mapping =====
+// Some models use a DIFFERENT GET endpoint for status checks than their POST endpoint.
+// Kling 2.6 Motion Control: POST to /video/kling-v2-6-motion-control-*, 
+//   but GET status from /image-to-video/kling-v2-6/{task-id}
+// Kling 3 Motion Control: GET status path matches POST path + /{task-id}
+const STATUS_ENDPOINT_MAP = {
+    '/video/kling-v2-6-motion-control-pro': '/image-to-video/kling-v2-6',
+    '/video/kling-v2-6-motion-control-std': '/image-to-video/kling-v2-6',
+    // Kling 3 variants use the same path for POST and GET — no override needed
+};
+
+// ===== Model Cost Tiers (relative, for UI guidance only) =====
+// Magnific does not publish exact EUR prices in their docs — only visible in dashboard.
+// These tiers reflect relative cost: Pro > Standard, 10s > 5s, newer > older.
+const MODEL_TIERS = {
+    // Motion Control
+    'kling-v3-motion-control-pro':  { label: 'Premium',     icon: '🔴' },
+    'kling-v3-motion-control-std':  { label: 'Hemat',       icon: '🟡' },
+    'kling-v2-6-motion-control-pro':{ label: 'Standard',    icon: '🟠' },
+    'kling-v2-6-motion-control-std':{ label: 'Paling Hemat',icon: '🟢' },
+    // Image-to-Video & Text-to-Video
+    'kling-v2-6-pro': { label: 'Standard',    icon: '🟠' },
+    'kling-v2-5-pro': { label: 'Hemat',       icon: '🟡' },
+};
 
 // === State ===
-let currentMode = 'motion-control';
+let currentMode = 'image-generator';
 let imageFile = null;
 let videoFile = null;
 let pollTimer = null;
 let requiresClientApiKey = true;
+// Nano Banana state
+let nbPhotos = [];          // Array of { file, url } objects
+let nbPollTimer = null;
+let nbLastResultUrl = null; // URL of last generated image
 
 // === DOM Elements ===
 const $ = id => document.getElementById(id);
@@ -49,12 +80,34 @@ const els = {
     // History
     historyList: $('historyList'), clearHistory: $('clearHistory'),
     toastContainer: $('toastContainer'),
+    // Nano Banana Image Generator
+    nbApiKeyInput: $('nbApiKeyInput'), toggleNbPassword: $('toggleNbPassword'),
+    imgGenSection: $('imgGenSection'), btnGenerateImage: $('btnGenerateImage'),
+    // NB Slots
+    nbSlot1Area: $('nbSlot1Area'), nbSlot1Input: $('nbSlot1Input'),
+    nbSlot1Preview: $('nbSlot1Preview'), nbSlot1Placeholder: $('nbSlot1Placeholder'), nbSlot1Remove: $('nbSlot1Remove'),
+    nbSlot2Area: $('nbSlot2Area'), nbSlot2Input: $('nbSlot2Input'),
+    nbSlot2Preview: $('nbSlot2Preview'), nbSlot2Placeholder: $('nbSlot2Placeholder'), nbSlot2Remove: $('nbSlot2Remove'),
+    nbSlot3Area: $('nbSlot3Area'), nbSlot3Input: $('nbSlot3Input'),
+    nbSlot3Preview: $('nbSlot3Preview'), nbSlot3Placeholder: $('nbSlot3Placeholder'), nbSlot3Remove: $('nbSlot3Remove'),
+    nbPromptInput: $('nbPromptInput'), nbAspectRatio: $('nbAspectRatio'),
+    nbResolution: $('nbResolution'),
+    nbOutputEmpty: $('nbOutputEmpty'), nbOutputProcessing: $('nbOutputProcessing'),
+    nbOutputResult: $('nbOutputResult'), nbOutputError: $('nbOutputError'),
+    nbResultImage: $('nbResultImage'), nbDownloadLink: $('nbDownloadLink'),
+    nbProcessingStatus: $('nbProcessingStatus'), nbProgressFill: $('nbProgressFill'),
+    nbErrorMessage: $('nbErrorMessage'),
+    btnUseAsRef: $('btnUseAsRef'), useAsRefMenu: $('useAsRefMenu'),
+    btnUseForMotion: $('btnUseForMotion'), btnUseForI2V: $('btnUseForI2V'),
+    btnNewImage: $('btnNewImage'), btnRetryImage: $('btnRetryImage'),
 };
+
 
 // === Init ===
 async function init() {
     await loadRuntimeConfig();
     loadApiKey();
+    loadNbApiKey();
     loadHistory();
     setupEventListeners();
     updateUIForMode();
@@ -76,6 +129,11 @@ function loadApiKey() {
     const key = getApiKey();
     els.apiKeyInput.value = key;
     updateApiStatus(!requiresClientApiKey || !!key);
+}
+function getNbApiKey() { return localStorage.getItem('nanobanana_api_key') || ''; }
+function loadNbApiKey() {
+    const key = getNbApiKey();
+    if (els.nbApiKeyInput) els.nbApiKeyInput.value = key;
 }
 function updateApiStatus(connected) {
     els.apiStatus.classList.toggle('connected', connected);
@@ -103,20 +161,46 @@ function showToast(msg, type = 'info') {
 
 // === Mode Switching ===
 function updateUIForMode() {
-    const mc = currentMode === 'motion-control';
+    const mc  = currentMode === 'motion-control';
     const i2v = currentMode === 'image-to-video';
     const t2v = currentMode === 'text-to-video';
+    const img = currentMode === 'image-generator';
 
-    // Show/hide sections
-    els.imageSection.classList.toggle('hidden', t2v);
-    els.videoSection.classList.toggle('hidden', !mc);
-    els.negativePromptSection.classList.toggle('hidden', mc);
-    els.modelGroup.classList.toggle('hidden', mc);
-    els.qualityGroup.classList.toggle('hidden', !mc);
-    els.durationGroup.classList.toggle('hidden', mc);
-    els.aspectGroup.classList.toggle('hidden', mc || i2v);
-    els.orientationGroup.classList.toggle('hidden', !mc);
-    els.audioGroup.classList.toggle('hidden', mc || i2v);
+    // Kling input sections
+    els.imageSection.classList.toggle('hidden', t2v || img);
+    els.videoSection.classList.toggle('hidden', !mc || img);
+    els.negativePromptSection.classList.toggle('hidden', mc || img);
+    els.modelGroup.classList.toggle('hidden', mc || img);
+    els.qualityGroup.classList.toggle('hidden', !mc || img);
+    els.durationGroup.classList.toggle('hidden', mc || img);
+    els.aspectGroup.classList.toggle('hidden', mc || i2v || img);
+    els.orientationGroup.classList.toggle('hidden', !mc || img);
+    els.audioGroup.classList.toggle('hidden', mc || i2v || img);
+
+    // Nano Banana section
+    els.imgGenSection.classList.toggle('hidden', !img);
+
+    // Generate buttons
+    els.btnGenerate.classList.toggle('hidden', img);
+    els.btnGenerateImage.classList.toggle('hidden', !img);
+
+    // Kling output states — hidden when image-generator
+    els.outputEmpty.classList.toggle('hidden', img ? true : !els.outputEmpty.classList.contains('hidden') ? false : true);
+    els.outputProcessing.classList.add('hidden');
+    els.outputResult.classList.add('hidden');
+    els.outputError.classList.add('hidden');
+
+    // NB output states — hidden when not image-generator
+    els.nbOutputEmpty.classList.toggle('hidden', !img);
+    els.nbOutputProcessing.classList.add('hidden');
+    els.nbOutputResult.classList.add('hidden');
+    els.nbOutputError.classList.add('hidden');
+
+    if (!img) {
+        // Restore Kling empty state when switching away from image-generator
+        els.outputEmpty.classList.remove('hidden');
+        els.nbOutputEmpty.classList.add('hidden');
+    }
 }
 
 // === File Upload Helpers ===
@@ -272,6 +356,7 @@ async function generateVideo() {
             video_url: videoData,
             cfg_scale: parseFloat(els.cfgScale.value),
             character_orientation: els.orientationSelect.value,
+            generate_audio: false, // disabled to save API credits
         };
         if (els.promptInput.value.trim()) body.prompt = els.promptInput.value.trim();
 
@@ -291,6 +376,7 @@ async function generateVideo() {
             image: imageData,
             duration: els.durationSelect.value,
             cfg_scale: parseFloat(els.cfgScale.value),
+            generate_audio: false, // disabled to save API credits
         };
         if (els.promptInput.value.trim()) body.prompt = els.promptInput.value.trim();
         if (els.negativePromptInput.value.trim()) body.negative_prompt = els.negativePromptInput.value.trim();
@@ -298,13 +384,14 @@ async function generateVideo() {
     } else {
         // text-to-video
         if (!els.promptInput.value.trim()) return showToast('Please enter a prompt', 'error');
-        endpoint = `/image-to-video/kling-v2-6-pro`;
+        const t2vModel = els.modelSelect.value;
+        endpoint = `/image-to-video/${t2vModel}`;
         body = {
             prompt: els.promptInput.value.trim(),
             duration: els.durationSelect.value,
             cfg_scale: parseFloat(els.cfgScale.value),
             aspect_ratio: els.aspectSelect.value,
-            generate_audio: els.generateAudio.checked,
+            generate_audio: false, // disabled to save API credits
         };
         if (els.negativePromptInput.value.trim()) body.negative_prompt = els.negativePromptInput.value.trim();
     }
@@ -348,26 +435,87 @@ async function generateVideo() {
     }
 }
 
-async function checkTaskStatus(taskId, createEndpoint) {
-    // The GET status endpoint is identical to the POST creation endpoint
-    const statusUrl = `${API_BASE}${createEndpoint}/${taskId}`;
+async function checkTaskStatus(taskId, createEndpoint, retryCount = 0) {
+    // Some models use a different GET endpoint than their POST endpoint
+    // e.g., Kling 2.6 MC: POST /video/kling-v2-6-motion-control-pro
+    //                      GET  /image-to-video/kling-v2-6/{task-id}
+    const statusBase = STATUS_ENDPOINT_MAP[createEndpoint] || createEndpoint;
+    const statusUrl = `${API_BASE}${statusBase}/${taskId}`;
+
+    console.log(`[Poll] GET ${statusUrl} (create: ${createEndpoint})`);
 
     const resp = await fetch(statusUrl, {
         headers: getApiHeaders(),
     });
-    if (!resp.ok) throw new Error(`Status check failed: ${resp.status}`);
+
+    // Handle 429 rate-limit with exponential backoff
+    if (resp.status === 429) {
+        if (retryCount >= MAX_429_RETRIES) {
+            throw new Error('API rate limit exceeded (429). Please wait a moment and try again.');
+        }
+        const delay = Math.min(5000 * Math.pow(2, retryCount), 60000); // 5s, 10s, 20s, 40s, 60s
+        console.warn(`[Rate Limit] 429 received. Retrying in ${delay / 1000}s (attempt ${retryCount + 1}/${MAX_429_RETRIES})...`);
+        els.processingStatus.textContent = `Rate limited... retrying in ${Math.round(delay / 1000)}s`;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return checkTaskStatus(taskId, createEndpoint, retryCount + 1);
+    }
+
+    // Handle 404 - task may not be registered yet, retry a few times
+    if (resp.status === 404) {
+        if (retryCount >= 3) {
+            // After 3 retries, try the list-all-tasks endpoint as fallback
+            const listBase = STATUS_ENDPOINT_MAP[createEndpoint] || createEndpoint;
+            console.warn(`[404 Fallback] Trying list endpoint: ${API_BASE}${listBase}`);
+            const listResp = await fetch(`${API_BASE}${listBase}`, {
+                headers: getApiHeaders(),
+            });
+            if (listResp.ok) {
+                const listData = await listResp.json();
+                const tasks = listData.data || listData;
+                if (Array.isArray(tasks)) {
+                    const match = tasks.find(t => t.task_id === taskId || t.id === taskId);
+                    if (match) return { data: match };
+                }
+            }
+            throw new Error('Task not found (404). The task ID may be invalid or expired.');
+        }
+        const delay = 5000 * (retryCount + 1); // 5s, 10s, 15s
+        console.warn(`[404] Task not found yet. Retrying in ${delay / 1000}s (attempt ${retryCount + 1}/3)...`);
+        els.processingStatus.textContent = `Task registering... retrying in ${Math.round(delay / 1000)}s`;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return checkTaskStatus(taskId, createEndpoint, retryCount + 1);
+    }
+
+    if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        const errMsg = errData.message || errData.error || `Status check failed: ${resp.status}`;
+        throw new Error(errMsg);
+    }
     return resp.json();
 }
 
 function startPolling(taskId, createEndpoint) {
     let progress = 25;
+    let attempts = 0;
     pollTimer = setInterval(async () => {
+        attempts++;
+        if (attempts > MAX_POLL_ATTEMPTS) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+            showOutput('error');
+            els.errorMessage.textContent = 'Polling timed out. The task may still be processing — check history later.';
+            els.btnGenerate.disabled = false;
+            updateHistory(taskId, 'timeout');
+            showToast('Polling timed out', 'error');
+            return;
+        }
+
         try {
             const result = await checkTaskStatus(taskId, createEndpoint);
             const data = result.data || result;
             const status = data.status?.toUpperCase();
 
-            progress = Math.min(progress + 8, 90);
+            progress = Math.min(progress + 5, 90);
             els.progressFill.style.width = `${progress}%`;
 
             if (status === 'COMPLETED' || status === 'SUCCEED') {
@@ -393,7 +541,7 @@ function startPolling(taskId, createEndpoint) {
                 throw new Error(data.error || 'Generation failed');
 
             } else {
-                els.processingStatus.textContent = `Status: ${status || 'Processing'}...`;
+                els.processingStatus.textContent = `Status: ${status || 'Processing'}... (${attempts}/${MAX_POLL_ATTEMPTS})`;
             }
         } catch (err) {
             clearInterval(pollTimer);
@@ -466,6 +614,212 @@ function renderHistory() {
 
 function loadHistory() { renderHistory(); }
 
+// ================================================================
+// === NANO BANANA IMAGE GENERATOR ================================
+// ================================================================
+
+// --- 3-Slot state ---
+const nbSlots = { 1: null, 2: null, 3: null }; // each: { file, url } or null
+
+// --- Slot helpers ---
+function nbSetSlot(num, file) {
+    if (nbSlots[num]?.url) URL.revokeObjectURL(nbSlots[num].url);
+    nbSlots[num] = { file, url: URL.createObjectURL(file) };
+    // Update preview
+    const preview  = els[`nbSlot${num}Preview`];
+    const ph       = els[`nbSlot${num}Placeholder`];
+    const removeBtn= els[`nbSlot${num}Remove`];
+    preview.src = nbSlots[num].url;
+    preview.classList.remove('hidden');
+    ph.classList.add('hidden');
+    removeBtn.classList.remove('hidden');
+    nbUpdateAutoPrompt();
+}
+
+function nbClearSlot(num) {
+    if (nbSlots[num]?.url) URL.revokeObjectURL(nbSlots[num].url);
+    nbSlots[num] = null;
+    const preview  = els[`nbSlot${num}Preview`];
+    const ph       = els[`nbSlot${num}Placeholder`];
+    const removeBtn= els[`nbSlot${num}Remove`];
+    preview.src = '';
+    preview.classList.add('hidden');
+    ph.classList.remove('hidden');
+    removeBtn.classList.add('hidden');
+    nbUpdateAutoPrompt();
+}
+
+// --- Auto-prompt builder ---
+function nbBuildAutoPrompt() {
+    const hasModel   = !!nbSlots[1];
+    const hasPose    = !!nbSlots[2];
+    const hasFashion = !!nbSlots[3];
+
+    if (!hasModel) return 'Upload foto model di Slot 1 untuk mulai...';
+
+    let parts = [];
+    parts.push('[SUBJECT]: The person in IMAGE 1. STRICTLY retain their exact facial features, face shape, skin tone, hair, and body proportions.');
+
+    if (hasPose && hasFashion) {
+        parts.push('[POSE & CAMERA]: Copy the EXACT body posture, limb placement, head angle, and camera perspective from IMAGE 2. Do not deviate from this pose.');
+        parts.push('[CLOTHING]: Dress the subject EXACTLY in the outfit shown in IMAGE 3. Replicate the fabric, cut, style, texture, and colors perfectly.');
+    } else if (hasPose) {
+        parts.push('[POSE & CAMERA]: Copy the EXACT body posture, limb placement, head angle, and camera perspective from IMAGE 2. Do not deviate from this pose.');
+    } else if (hasFashion) {
+        parts.push('[CLOTHING]: Dress the subject EXACTLY in the outfit shown in IMAGE 2. Replicate the fabric, cut, style, texture, and colors perfectly.');
+    }
+
+    parts.push('[STYLE & QUALITY]: Photorealistic, cinematic lighting, ultra-high resolution, highly detailed, 8k professional studio photography.');
+    return parts.join('\n\n');
+}
+
+function nbUpdateAutoPrompt() {
+    const preview = $('nbAutoPromptPreview');
+    if (preview) preview.textContent = nbBuildAutoPrompt();
+}
+
+// --- NB output state manager ---
+function showNbOutput(state) {
+    ['nbOutputEmpty','nbOutputProcessing','nbOutputResult','nbOutputError'].forEach(id => {
+        els[id].classList.add('hidden');
+    });
+    if (state && els[state]) els[state].classList.remove('hidden');
+}
+
+// --- Generate Image ---
+async function generateImage() {
+    const nbKey = getNbApiKey();
+    if (!nbKey) {
+        showToast('Masukkan API key (Gemini) di Settings', 'error');
+        els.settingsModal.classList.add('active');
+        return;
+    }
+    if (!nbSlots[1]) {
+        showToast('Upload foto model di Slot 1 terlebih dahulu', 'error');
+        return;
+    }
+
+    showNbOutput('nbOutputProcessing');
+    els.nbProcessingStatus.textContent = 'Mempersiapkan foto referensi...';
+    els.nbProgressFill.style.width = '10%';
+    els.btnGenerateImage.disabled = true;
+
+    // Simulated progress timer since Gemini takes a few seconds
+    let progress = 10;
+    const progressInterval = setInterval(() => {
+        progress += (100 - progress) * 0.1;
+        els.nbProgressFill.style.width = `${Math.min(progress, 90)}%`;
+    }, 1000);
+
+    try {
+        const imageUrls = [];
+        for (const num of [1, 2, 3]) {
+            if (nbSlots[num]) {
+                const b64 = await fileToBase64(nbSlots[num].file);
+                imageUrls.push(b64);
+            }
+        }
+
+        const autoPrompt  = nbBuildAutoPrompt();
+        const extraPrompt = els.nbPromptInput.value.trim();
+        const finalPrompt = extraPrompt ? `${autoPrompt} ${extraPrompt}` : autoPrompt;
+
+        els.nbProcessingStatus.textContent = 'Menghasilkan gambar (Google Gemini)...';
+        
+        const payload = {
+            prompt: finalPrompt,
+            imageUrls,
+            aspectRatio: els.nbAspectRatio.value,
+            resolution: els.nbResolution.value,
+        };
+
+        const resp = await fetch('/gemini-api/generate-image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-gemini-api-key': nbKey,
+            },
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+
+        clearInterval(progressInterval);
+
+        if (!resp.ok || data.code !== 200) {
+            throw new Error(data.message || data.error || `HTTP ${resp.status}`);
+        }
+
+        els.nbProgressFill.style.width = '100%';
+        const imgUrl = data.data?.resultImageUrl;
+        if (!imgUrl) throw new Error('No image URL in response');
+        
+        nbLastResultUrl = imgUrl;
+        els.nbResultImage.src = imgUrl;
+        els.nbDownloadLink.href = imgUrl;
+        showNbOutput('nbOutputResult');
+        els.btnGenerateImage.disabled = false;
+        showToast('Gambar berhasil dibuat! ✨', 'success');
+
+    } catch (err) {
+        clearInterval(progressInterval);
+        showNbOutput('nbOutputError');
+        els.nbErrorMessage.textContent = err.message || 'Generation failed';
+        els.btnGenerateImage.disabled = false;
+        showToast('Gagal: ' + err.message, 'error');
+    }
+}
+
+// --- Use As Reference in Kling ---
+function useAsReference(targetMode) {
+    if (!nbLastResultUrl) { showToast('No image generated yet', 'error'); return; }
+    // Close the dropdown menu
+    els.useAsRefMenu.classList.add('hidden');
+    // Set the URL as reference image
+    els.imageUrlInput.value = nbLastResultUrl;
+    imageFile = null;
+    // Switch to target Kling mode
+    currentMode = targetMode;
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.mode === targetMode);
+    });
+    updateUIForMode();
+    updateCreditEstimate();
+    // Clear any previous image preview to force URL usage
+    els.imagePreview?.classList.add('hidden');
+    els.imagePlaceholder?.classList.remove('hidden');
+    els.removeImage?.classList.add('hidden');
+    showToast(`📌 Image set as reference for ${targetMode === 'motion-control' ? 'Motion Control' : 'Image to Video'}`, 'success');
+}
+
+// ================================================================
+
+// === Credit Estimator ===
+function updateCreditEstimate() {
+    const btn = els.btnGenerate;
+    let modelKey, duration;
+
+    if (currentMode === 'motion-control') {
+        modelKey = els.qualitySelect?.value;
+        duration = '5'; // MC doesn't have selectable duration
+    } else {
+        modelKey = els.modelSelect?.value;
+        duration = els.durationSelect?.value || '5';
+    }
+
+    const tier = MODEL_TIERS[modelKey];
+    const dur10 = duration === '10'; // 10s costs ~2x more
+
+    const svg = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+
+    if (tier) {
+        // Show tier label + duration warning if 10s
+        const durLabel = dur10 ? ' · 10s = 2× biaya' : '';
+        btn.innerHTML = `${svg} Generate Video <span class="credit-badge">${tier.icon} ${tier.label}${durLabel}</span>`;
+    } else {
+        btn.innerHTML = `${svg} Generate Video`;
+    }
+}
+
 // === Event Listeners ===
 function setupEventListeners() {
     // Settings
@@ -474,13 +828,22 @@ function setupEventListeners() {
     els.settingsModal.addEventListener('click', e => { if (e.target === els.settingsModal) els.settingsModal.classList.remove('active'); });
     els.saveApiKey.addEventListener('click', () => {
         const key = els.apiKeyInput.value.trim();
-        if (key) { localStorage.setItem('magnific_api_key', key); updateApiStatus(true); showToast('API key saved!', 'success'); }
+        if (key) { localStorage.setItem('magnific_api_key', key); updateApiStatus(true); }
         else { localStorage.removeItem('magnific_api_key'); updateApiStatus(false); }
+        // Save NB key
+        const nbKey = els.nbApiKeyInput?.value.trim();
+        if (nbKey) { localStorage.setItem('nanobanana_api_key', nbKey); }
+        else { localStorage.removeItem('nanobanana_api_key'); }
         els.settingsModal.classList.remove('active');
+        showToast('API keys saved!', 'success');
     });
     els.togglePassword.addEventListener('click', () => {
         const t = els.apiKeyInput.type === 'password' ? 'text' : 'password';
         els.apiKeyInput.type = t;
+    });
+    els.toggleNbPassword?.addEventListener('click', () => {
+        const t = els.nbApiKeyInput.type === 'password' ? 'text' : 'password';
+        els.nbApiKeyInput.type = t;
     });
 
     // Mode tabs
@@ -509,6 +872,15 @@ function setupEventListeners() {
     // CFG slider
     els.cfgScale.addEventListener('input', () => { els.cfgValue.textContent = els.cfgScale.value; });
 
+    // Credit estimator — update whenever model or duration changes
+    [els.qualitySelect, els.modelSelect, els.durationSelect].forEach(el => {
+        if (el) el.addEventListener('change', updateCreditEstimate);
+    });
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.addEventListener('click', () => setTimeout(updateCreditEstimate, 50));
+    });
+    updateCreditEstimate();
+
     // Generate
     els.btnGenerate.addEventListener('click', generateVideo);
 
@@ -521,6 +893,53 @@ function setupEventListeners() {
         localStorage.removeItem('kling_history');
         renderHistory();
         showToast('History cleared', 'info');
+    });
+
+    // ===== NANO BANANA EVENT LISTENERS =====
+    // Setup per-slot upload handlers
+    [1, 2, 3].forEach(num => {
+        const area    = $(`nbSlot${num}Area`);
+        const input   = $(`nbSlot${num}Input`);
+        const removeB = $(`nbSlot${num}Remove`);
+
+        area.addEventListener('click', (e) => {
+            if (!removeB.contains(e.target)) input.click();
+        });
+        area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
+        area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+        area.addEventListener('drop', e => {
+            e.preventDefault(); area.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) nbSetSlot(num, file);
+        });
+        input.addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) nbSetSlot(num, file);
+            e.target.value = '';
+        });
+        removeB.addEventListener('click', e => {
+            e.stopPropagation();
+            nbClearSlot(num);
+        });
+    });
+
+    // NB Generate Image
+    els.btnGenerateImage.addEventListener('click', generateImage);
+    els.btnRetryImage.addEventListener('click', generateImage);
+    els.btnNewImage.addEventListener('click', () => showNbOutput('nbOutputEmpty'));
+
+    // NB Use As Reference
+    els.btnUseAsRef.addEventListener('click', (e) => {
+        e.stopPropagation();
+        els.useAsRefMenu.classList.toggle('hidden');
+    });
+    els.btnUseForMotion.addEventListener('click', () => useAsReference('motion-control'));
+    els.btnUseForI2V.addEventListener('click', () => useAsReference('image-to-video'));
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!els.btnUseAsRef?.contains(e.target) && !els.useAsRefMenu?.contains(e.target)) {
+            els.useAsRefMenu?.classList.add('hidden');
+        }
     });
 }
 
